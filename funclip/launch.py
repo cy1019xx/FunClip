@@ -9,6 +9,7 @@ import logging
 import argparse
 import gradio as gr
 from funasr import AutoModel
+from video_slicer import VideoSlicer
 from videoclipper import VideoClipper
 from llm.openai_api import openai_call
 from llm.qwen_api import call_qwen_model
@@ -16,12 +17,14 @@ from llm.g4f_openai_api import g4f_openai_call
 from utils.trans_utils import extract_timestamps
 from introduction import top_md_1, top_md_3, top_md_4
 
+import os
+os.environ['GRADIO_TEMP_DIR'] = 'c:/coffee_cut_temp'
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='argparse testing')
     parser.add_argument('--lang', '-l', type=str, default = "zh", help="language")
     parser.add_argument('--share', '-s', action='store_true', help="if to establish gradio share link")
-    parser.add_argument('--port', '-p', type=int, default=7860, help='port number')
+    parser.add_argument('--port', '-p', type=int, default=7862, help='port number')
     parser.add_argument('--listen', action='store_true', help="if to listen to all hosts")
     args = parser.parse_args()
     
@@ -165,6 +168,20 @@ if __name__ == "__main__":
                 dest_spk=video_spk_input, output_dir=output_dir, timestamp_list=timestamp_list, add_sub=True)
             return None, (sr, res_audio), message, clip_srt
     
+    # 更新显示视频文件列表的逻辑
+    def update_video_list(video_inputs):                
+        if video_inputs:
+            return "\n".join([os.path.abspath(file.name) for file in video_inputs])  # 返回完整路径
+        return ""
+    # 处理视频按钮，的点击事件
+    def analyze_video(video_inputs):
+        video_paths = []
+        for file in video_inputs:
+            video_paths.append(os.path.abspath(file.name) )
+        slicer = VideoSlicer(video_paths)        
+        slicer.process_videos()
+        return ''
+
     # gradio interface
     theme = gr.Theme.load("funclip/utils/theme.json")
     with gr.Blocks(theme=theme) as funclip_service:
@@ -175,9 +192,16 @@ if __name__ == "__main__":
         video_state, audio_state = gr.State(), gr.State()
         with gr.Row():
             with gr.Column():
+
                 with gr.Row():
                     video_input = gr.Video(label="视频输入 | Video Input")
                     audio_input = gr.Audio(label="音频输入 | Audio Input")
+                with gr.Row():
+                    # 新增多个视频文件输入控件
+                    multi_video_input = gr.File(label="多个视频输入 | Multiple Video Inputs", file_types=["video"], file_count="multiple" )
+                    video_file_list = gr.Textbox(label="已选择视频文件 | Selected Video Files", lines=5, max_lines=6,interactive=False)            
+                with gr.Row():
+                    analyze_button = gr.Button("分析视频 | analyze Videos")
                 with gr.Column():
                     gr.Examples(['https://isv-data.oss-cn-hangzhou.aliyuncs.com/ics/MaaS/ClipVideo/%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%A4%9A%E8%AF%BB%E4%B9%A6%EF%BC%9F%E8%BF%99%E6%98%AF%E6%88%91%E5%90%AC%E8%BF%87%E6%9C%80%E5%A5%BD%E7%9A%84%E7%AD%94%E6%A1%88-%E7%89%87%E6%AE%B5.mp4', 
                                  'https://isv-data.oss-cn-hangzhou.aliyuncs.com/ics/MaaS/ClipVideo/2022%E4%BA%91%E6%A0%96%E5%A4%A7%E4%BC%9A_%E7%89%87%E6%AE%B52.mp4', 
@@ -194,7 +218,7 @@ if __name__ == "__main__":
                         # with gr.Row():
                             # video_sd_switch = gr.Radio(["No", "Yes"], label="👥区分说话人 Get Speakers", value='No')
                         hotwords_input = gr.Textbox(label="🚒 热词 | Hotwords(可以为空，多个热词使用空格分隔，仅支持中文热词)")
-                        output_dir = gr.Textbox(label="📁 文件输出路径 | File Output Dir (可以为空，Linux, mac系统可以稳定使用)", value=" ")
+                        output_dir = gr.Textbox(label="📁 文件输出路径 | File Output Dir (可以为空，Linux, mac系统可以稳定使用)", value="./output")
                         with gr.Row():
                             recog_button = gr.Button("👂 识别 | ASR", variant="primary")
                             recog_button2 = gr.Button("👂👫 识别+区分说话人 | ASR+SD")
@@ -302,7 +326,16 @@ if __name__ == "__main__":
                                    output_dir,
                                    ],
                            outputs=[video_output, audio_output, clip_message, srt_clipped])
-    
+        # 在 multi_video_input 的变化时更新 video_file_list
+        multi_video_input.change(
+            fn=update_video_list,
+            inputs=[multi_video_input],
+            outputs=[video_file_list]
+        )
+        analyze_button.click(analyze_video,
+                            inputs=[multi_video_input],
+                            outputs=[])
+        # 启动服务
     # start gradio service in local or share
     if args.listen:
         funclip_service.launch(share=args.share, server_port=args.port, server_name=server_name, inbrowser=False)

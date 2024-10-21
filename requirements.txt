@@ -12,3 +12,6 @@ openai
 g4f
 dashscope
 curl_cffi
+
+moviepy
+Pillow
