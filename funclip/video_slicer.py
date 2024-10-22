@@ -160,6 +160,26 @@ class VideoSlicer:
             # 执行命令
             subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
             self.logger.debug(f"使用 ffmpeg 在 {timestamp}s 保存帧为 '{image_path.name}'")
+
+                    # 使用 PIL 打开图像并进行缩放
+            with Image.open(image_path) as img:
+                # 获取当前宽度和高度
+                width, height = img.size
+                
+                # 计算缩放比例，确保长边不超过1024
+                max_size = 1080
+                if width > height:
+                    scale = max_size / width
+                else:
+                    scale = max_size / height
+                
+                # 新尺寸
+                new_size = (int(width * scale), int(height * scale))
+                # 缩放并保存
+                img = img.resize(new_size, Image.LANCZOS)
+                img.save(image_path)
+                self.logger.debug(f"图像 '{image_path.name}' 缩放为 {new_size}")
+                
         except subprocess.CalledProcessError as e:
             self.logger.error(f"使用 ffmpeg 在 {timestamp}s 保存帧失败: {e.stderr}")
 
@@ -175,7 +195,6 @@ class VideoSlicer:
             self.logger.error(f"无法获取视频分辨率，跳过视频: {video_path.name}")
             return
 
-        self.logger.info(f"视频分辨率: {width}x{height}")
 
         duration = self.get_video_duration(video_path)
         if duration is None:
