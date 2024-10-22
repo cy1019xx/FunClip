@@ -3,7 +3,7 @@ from dashscope import Generation
 
 
 def call_qwen_model(key=None, 
-                    model="qwen_plus", 
+                    model="qwen-max-latest", 
                     user_content="如何做西红柿炖牛腩？", 
                     system_content=None):
     dashscope.api_key = key
